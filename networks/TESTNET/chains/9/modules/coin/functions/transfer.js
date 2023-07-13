@@ -29,16 +29,16 @@ const transactionBuilder =
         const response = await signedTransaction[0].send(api);
         const requestKey = response.requestKeys[0];
 
-        console.log('Start polling status of request:' + requestKey);
+        Logger.log('Start polling status of request: ' + requestKey);
 
         pollSpvProof(requestKey, (chainId.toString()), api, {
             interval: 1000,
             timeout: 60000,
             onPoll: (status) => {
-                console.log(status)
+                Logger.log(status)
             }
         });
     } catch (error) {
-        console.log(error.message);
+        Logger.log(error.message);
     }
 }())
