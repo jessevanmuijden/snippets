@@ -8,37 +8,38 @@ const networkId = 'testnet04';
 const apiVersion = '0.0';
 const api = 'https://api.' + network + '.chainweb.com/chainweb/' + apiVersion + '/' + networkId + '/chain/' + chainId + '/pact';
 
-const transactionBuilder =
-  Pact.modules['coin']
-    .transfer(senderAccount, receiverAccount, amount)
-    .addCap('coin.GAS', senderPublicKey)
-    .addCap(
-      'coin.TRANSFER',
-      senderPublicKey,
-      senderAccount,
-      receiverAccount,
-      amount,
-    )
-    .setMeta({
-      sender: senderAccount,
-    }, networkId);
+const {
+    submit,
+    pollStatus,
+} = getClient(api);
 
-(async function () {
-    const signedTransaction = await signWithChainweaver(transactionBuilder)
-    try {
-        const response = await signedTransaction[0].send(api);
-        const requestKey = response.requestKeys[0];
+const transaction = Pact.builder
+  .execution(
+      Pact.modules['coin'].transfer(senderAccount, receiverAccount, amount)
+  )
+  .addSigner(senderPublicKey, (withCap) => [
+      withCap('coin.TRANSFER', senderAccount, receiverAccount, amount),
+      withCap('coin.GAS'),
+  ])
+  .setMeta({ chainId: chainId.toString(), sender: senderAccount })
+  .setNetworkId(networkId)
+  .createTransaction();
 
-        Logger.log('Start polling status of request: ' + requestKey);
+async function main() {
+    Logger.log(JSON.stringify(transaction, null, 3));
+    const signedTransaction = await signWithChainweaver(transaction);
 
-        pollSpvProof(requestKey, (chainId.toString()), api, {
-            interval: 1000,
-            timeout: 60000,
-            onPoll: (status) => {
-                Logger.log(status)
-            }
-        });
-    } catch (error) {
-        Logger.log(error.message);
+    Logger.log(JSON.stringify(signedTransaction, null, 3))
+
+    if (!isSignedCommand(signedTransaction)) {
+        Logger.log('Transaction was not signed.')
     }
-}())
+
+    Logger.log('Submitting transaction.');
+    const requestKeys = await submit(signedTransaction);
+    Logger.log('Please wait, polling request status for request key: ' + requestKeys);
+    const result = await pollStatus(requestKeys);
+    Logger.log(JSON.stringify(result, null, 3));
+};
+
+main().catch(Logger.log);
